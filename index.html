@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Deteksi Masker</title>
+    <!-- Google Fonts, Bootstrap, Bootstrap Icons, Chart.js -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;400&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
+    <style>
+        :root {
+            --primary: #0d6efd;
+            --primary-dark: #0a58ca;
+            --accent: #00c48c;
+            --danger: #ff4e7a;
+            --background: #f4f7fa;
+            --card-bg: #fff;
+            --navbar-gradient: linear-gradient(90deg, #0d6efd 0%, #00c48c 100%);
+            --shadow: 0 2px 12px 0 rgba(13, 110, 253, 0.08);
+            --border-radius: 1.2rem;
+            --menu-hover: #e3f2fd;
+            --glass-bg: rgba(255,255,255,0.85);
+            --glass-blur: blur(12px);
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Montserrat', 'Roboto', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--background);
+            color: #222;
+            min-height: 100vh;
+            width: 100vw;
+            overflow-x: hidden;
+            font-size: 13px;
+            transition: background 0.5s;
+            height: 100%;
+        }
+        body {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f4f7fa 100%);
+            min-height: 100vh;
+            min-width: 100vw;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #main-fullscreen-wrapper {
+            min-height: 100vh;
+            min-width: 100vw;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .main-content {
+            position: relative;
+            z-index: 1;
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            min-height: 0;
+            align-items: center;
+            justify-content: center;
+        }
+        .centered-app-container {
+            width: 100%;
+            max-width: 410px;
+            margin: 0 auto;
+            background: var(--glass-bg);
+            box-shadow: 0 8px 32px rgba(13,110,253,0.10), 0 1.5px 8px rgba(0,0,0,0.04);
+            border-radius: var(--border-radius);
+            padding: 1.2rem 1.1rem 1.1rem 1.1rem;
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1.5px solid #e3f2fd;
+            min-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .main-menu.navbar {
+            background: var(--navbar-gradient) !important;
+            box-shadow: var(--shadow);
+            border-radius: var(--border-radius) var(--border-radius) 0 0;
+            margin-bottom: 0 !important;
+            padding: 0.2rem 0.5rem;
+            width: 100%;
+            max-width: 410px;
+            margin: 0 auto 0.5rem auto;
+        }
+        .main-menu .navbar-brand {
+            color: #fff !important;
+            font-weight: 700;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+        }
+        .main-menu .nav-link {
+            color: #fff !important;
+            font-weight: 500;
+            font-size: 0.98rem;
+            margin-right: 0.5rem;
+            transition: color 0.2s;
+            padding: 0.2rem 0.7rem;
+        }
+        .main-menu .nav-link.active, .main-menu .nav-link:focus, .main-menu .nav-link:hover {
+            color: var(--accent) !important;
+            background: var(--menu-hover);
+            border-radius: 0.5rem;
+        }
+        .card-dgw {
+            background: var(--glass-bg);
+            border-radius: var(--border-radius);
+            box-shadow: 0 1.5px 8px rgba(13,110,253,0.07);
+            padding: 0.8rem 0.7rem;
+            margin-bottom: 1rem;
+            border: 1px solid #e3f2fd;
+        }
+        .dashboard-metrics {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        .metric-card {
+            flex: 1 1 80px;
+            min-width: 80px;
+            background: #f8fafc;
+            border-radius: 0.7rem;
+            box-shadow: 0 1px 6px rgba(13,110,253,0.04);
+            padding: 0.5rem 0.5rem;
+            text-align: center;
+        }
+        .metric-label {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+        .metric-value {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--primary-dark);
+        }
+        .video-container-dgw {
+            position: relative;
+            width: 100%;
+            max-width: 340px;
+            margin: 0 auto;
+            overflow: hidden;
+            border-radius: 0.8rem;
+            box-shadow: 0 2px 8px rgba(13,110,253,0.08);
+            background: #000;
+            min-height: 180px;
+            aspect-ratio: 16/9;
+        }
+        #videoElement {
+            width: 100%;
+            height: auto;
+            min-height: 180px;
+            display: block;
+            background: #000;
+            border-radius: 0.8rem;
+            object-fit: contain;
+            aspect-ratio: 16/9;
+        }
+        .face-box {
+            position: absolute;
+            border: 2px solid;
+            border-radius: 6px;
+            transition: all 0.1s ease;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .detection-panel {
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 2px 7px;
+            font-size: 10px;
+            border-radius: 4px;
+        }
+        .log-entry {
+            font-size: 0.82rem;
+            margin-bottom: 0.12rem;
+        }
+        .log-entry.error {
+            color: var(--danger);
+        }
+        .log-entry.info {
+            color: var(--primary-dark);
+        }
+        .table-dgw th, .table-dgw td {
+            vertical-align: middle !important;
+        }
+        .table-dgw th {
+            background: var(--background);
+            color: var(--primary-dark);
+            font-weight: 700;
+            font-size: 0.89rem;
+        }
+        .table-dgw td {
+            font-size: 0.88rem;
+        }
+        .chart-container-dgw {
+            width: 100%;
+            max-width: 340px;
+            margin: 0 auto;
+        }
+        .setting-slider {
+            accent-color: var(--primary);
+        }
+        .section-title-dgw {
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--primary-dark);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .section-title-dgw i {
+            font-size: 1rem;
+        }
+        .report-img-preview {
+            width: 100%;
+            border-radius: 0.7rem;
+            border: 1px solid #e3e3e3;
+            margin-bottom: 0.8rem;
+            box-shadow: 0 1px 6px rgba(13,110,253,0.04);
+            max-width: 380px;
+            min-height: 160px;
+            object-fit: contain;
+            aspect-ratio: 16/9;
+            height: 220px;
+        }
+        #hasil .bg-light.p-2.rounded-3 {
+            font-size: 1.08rem;
+            padding: 1.1rem 1.2rem 1.1rem 1.2rem !important;
+            margin-bottom: 0.5rem;
+        }
+        #hasil .section-title-dgw {
+            font-size: 1.13rem;
+        }
+        #hasil #reportResult {
+            font-size: 1.08rem !important;
+            min-height: 2.2em;
+        }
+        #hasil h6.fw-semibold {
+            font-size: 1.08rem !important;
+        }
+        .bg-gradient-dgw {
+            background: linear-gradient(120deg, #e3f2fd 0%, #f4f7fa 100%);
+        }
+        .detail-table-row {
+            background: #f8fafc;
+        }
+        .btn-dgw {
+            border-radius: 0.5rem;
+            font-weight: 600;
+            font-size: 0.93rem;
+            padding: 0.28rem 0.8rem;
+            transition: background 0.2s, color 0.2s;
+        }
+        .btn-dgw-primary {
+            background: var(--primary);
+            color: #fff;
+        }
+        .btn-dgw-primary:hover {
+            background: var(--primary-dark);
+            color: #fff;
+        }
+        .btn-dgw-secondary {
+            background: #6c757d;
+            color: #fff;
+        }
+        .btn-dgw-secondary:hover {
+            background: #495057;
+            color: #fff;
+        }
+        .btn-dgw-success {
+            background: var(--accent);
+            color: #fff;
+        }
+        .btn-dgw-success:hover {
+            background: #009e6d;
+            color: #fff;
+        }
+        .btn-dgw-danger {
+            background: var(--danger);
+            color: #fff;
+        }
+        .btn-dgw-danger:hover {
+            background: #c82333;
+            color: #fff;
+        }
+        .badge-dgw {
+            border-radius: 0.5rem;
+            font-size: 0.82rem;
+            font-weight: 600;
+            padding: 0.18em 0.6em;
+        }
+        .badge-dgw-success {
+            background: #e6f9f3;
+            color: var(--accent);
+        }
+        .badge-dgw-danger {
+            background: #ffe6ee;
+            color: var(--danger);
+        }
+        .badge-dgw-info {
+            background: #e3f2fd;
+            color: var(--primary-dark);
+        }
+        .badge-dgw-warning {
+            background: #fffbe6;
+            color: #ffc107;
+        }
+        /* Responsive tweaks */
+        @media (max-width: 991px) {
+            .video-container-dgw, .chart-container-dgw, .report-img-preview, .centered-app-container, .main-menu.navbar {
+                max-width: 98vw;
+            }
+        }
+        @media (max-width: 767px) {
+            .main-content { padding: 0 0.1rem; }
+            .dashboard-metrics { flex-direction: column; gap: 0.4rem; }
+            .card-dgw { padding: 0.5rem 0.3rem; }
+            .section-title-dgw { font-size: 0.95rem; }
+            .video-container-dgw, .chart-container-dgw, .report-img-preview, .centered-app-container, .main-menu.navbar { max-width: 99vw; }
+            #hasil {
+                max-height: 60vh;
+            }
+        }
+        /* Fullscreen tab content */
+        #mainTabContent {
+            flex: 1 1 auto;
+            min-height: 0;
+            height: 100%;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .tab-pane {
+            flex: 1 1 auto;
+            min-height: 0;
+            height: 100%;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        /* Modern tab style */
+        .nav-tabs {
+            border-bottom: 1.5px solid #e3f2fd;
+            justify-content: center;
+            gap: 0.2rem;
+        }
+        .nav-tabs .nav-link {
+            border: none;
+            border-radius: 0.7rem 0.7rem 0 0;
+            background: transparent;
+            color: #0a58ca;
+            font-weight: 600;
+            font-size: 0.97rem;
+            padding: 0.35rem 1.1rem;
+            transition: background 0.18s, color 0.18s;
+        }
+        .nav-tabs .nav-link.active {
+            background: var(--primary);
+            color: #fff !important;
+            box-shadow: 0 2px 8px rgba(13,110,253,0.08);
+        }
+        .nav-tabs .nav-link:hover:not(.active) {
+            background: #e3f2fd;
+            color: var(--primary-dark);
+        }
+        #hasil {
+            max-height: 420px;
+            overflow-y: auto;
+            padding-right: 6px;
+        }
+        #homeTabPane {
+            overflow-y: auto;
+            max-height: 80vh;
+            padding-bottom: 1.5rem;
+        }
+        @media (max-width: 767px) {
+            #homeTabPane {
+                max-height: 88vh;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-dgw min-vh-100" style="height:100vh;width:100vw;overflow:hidden;">
+    <div id="main-fullscreen-wrapper">
+        <!-- Navbar -->
+        <nav class="navbar main-menu navbar-expand-lg mb-2">
+            <div class="container-fluid p-0">
+                <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+                    <i class="bi bi-shield-check"></i>
+                    MaskerAI
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="mainNavbar">
+                    <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+                        <li class="nav-item"><a class="nav-link active" href="#">Home</a></li>
+                    </ul>
+                    <span class="badge-dgw badge-dgw-info ms-2">v1.0</span>
+                </div>
+            </div>
+        </nav>
+        <div class="centered-app-container">
+            <div class="main-content flex-grow-1 w-100" style="padding:0;">
+                <!-- Tab Navigation -->
+                <ul class="nav nav-tabs mb-3" id="mainTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="home-tab" data-bs-toggle="tab" data-bs-target="#homeTabPane" type="button" role="tab" aria-controls="homeTabPane" aria-selected="true">
+                            <i class="bi bi-house-door"></i>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="dashboard-tab" data-bs-toggle="tab" data-bs-target="#dashboardTabPane" type="button" role="tab" aria-controls="dashboardTabPane" aria-selected="false">
+                            <i class="bi bi-speedometer2"></i>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="grafik-tab" data-bs-toggle="tab" data-bs-target="#grafikTabPane" type="button" role="tab" aria-controls="grafikTabPane" aria-selected="false">
+                            <i class="bi bi-graph-up"></i>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="laporan-tab" data-bs-toggle="tab" data-bs-target="#laporanTabPane" type="button" role="tab" aria-controls="laporanTabPane" aria-selected="false">
+                            <i class="bi bi-table"></i>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="pengaturan-tab" data-bs-toggle="tab" data-bs-target="#pengaturanTabPane" type="button" role="tab" aria-controls="pengaturanTabPane" aria-selected="false">
+                            <i class="bi bi-gear"></i>
+                        </button>
+                    </li>
+                </ul>
+                <!-- Tab Panes -->
+                <div class="tab-content flex-grow-1" id="mainTabContent" style="min-height:0;">
+                    <!-- Home Tab -->
+                    <div class="tab-pane fade show active h-100" id="homeTabPane" role="tabpanel" aria-labelledby="home-tab">
+                        <div class="card-dgw mb-2">
+                            <div class="text-center mb-2">
+                                <h2 class="fw-bold" style="font-size:1.05rem;color:var(--primary-dark);letter-spacing:0.5px;">Sistem Deteksi Masker</h2>
+                                <p class="text-secondary mb-2" style="font-size:0.92rem;">Aplikasi deteksi masker berbasis web dengan TensorFlow.js</p>
+                            </div>
+                        </div>
+                        <!-- Kamera -->
+                        <div id="kamera" class="card-dgw mb-2">
+                            <div class="section-title-dgw mb-2"><i class="bi bi-camera-video text-info"></i> Kamera</div>
+                            <div class="video-container-dgw mb-2">
+                                <video id="videoElement" autoplay playsinline></video>
+                                <div id="faceBoxesContainer"></div>
+                                <canvas id="focusCanvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5;"></canvas>
+                            </div>
+                            <div class="d-flex flex-wrap justify-content-center gap-2 mt-1">
+                                <button id="switchButton" onclick="switchCamera()" class="btn btn-dgw btn-dgw-secondary" disabled>
+                                    <i class="bi bi-arrow-repeat me-1"></i> Ganti Kamera
+                                </button>
+                                <button id="captureButton" onclick="captureImage()" class="btn btn-dgw btn-dgw-success">
+                                    <i class="bi bi-camera me-1"></i> Ambil Gambar
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Hasil Gambar & Laporan -->
+                        <div id="hasil" class="card-dgw mb-2">
+                            <div class="section-title-dgw mb-2"><i class="bi bi-image text-primary"></i> Hasil & Laporan</div>
+                            <img id="capturedImage" src="https://placehold.co/340x100" alt="Preview gambar hasil capture" class="report-img-preview" />
+                            <div class="bg-light p-2 rounded-3">
+                                <h6 class="fw-semibold mb-1 text-secondary" style="font-size:0.93rem;">Laporan Deteksi:</h6>
+                                <div id="reportResult" class="fs-6 text-secondary" style="font-size:0.89rem;">
+                                    - Belum ada gambar diambil
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Log -->
+                        <div id="log" class="card-dgw mb-1">
+                            <div class="section-title-dgw mb-1"><i class="bi bi-clock-history text-danger"></i> Log Aktivitas</div>
+                            <div id="activityLog" class="bg-light p-2 rounded-3" style="height:70px;overflow-y:auto;">
+                                <div class="log-entry text-secondary">Sistem siap digunakan</div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Dashboard Tab -->
+                    <div class="tab-pane fade h-100" id="dashboardTabPane" role="tabpanel" aria-labelledby="dashboard-tab">
+                        <div id="dashboard" class="card-dgw mb-2">
+                            <div class="section-title-dgw mb-2"><i class="bi bi-speedometer2 text-primary"></i> Dashboard</div>
+                            <div class="dashboard-metrics">
+                                <div class="metric-card">
+                                    <div class="metric-label">Laporan</div>
+                                    <div class="metric-value" id="metricTotalLaporan">0</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Wajah</div>
+                                    <div class="metric-value" id="metricTotalWajah">0</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Masker</div>
+                                    <div class="metric-value text-success" id="metricMasker">0</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Tanpa</div>
+                                    <div class="metric-value text-danger" id="metricNoMasker">0</div>
+                                </div>
+                                <div class="metric-card">
+                                    <div class="metric-label">Kepatuhan</div>
+                                    <div class="metric-value text-primary" id="metricKepatuhan">0%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Grafik Tab -->
+                    <div class="tab-pane fade h-100" id="grafikTabPane" role="tabpanel" aria-labelledby="grafik-tab">
+                        <div id="grafik" class="card-dgw mb-2">
+                            <div class="section-title-dgw mb-2"><i class="bi bi-graph-up text-success"></i> Grafik Kepatuhan</div>
+                            <div class="chart-container-dgw">
+                                <canvas id="maskChart" height="120"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Laporan Tab -->
+                    <div class="tab-pane fade h-100" id="laporanTabPane" role="tabpanel" aria-labelledby="laporan-tab">
+                        <div id="laporan" class="card-dgw mb-2">
+                            <div class="section-title-dgw mb-2"><i class="bi bi-table text-primary"></i> Tabel Laporan</div>
+                            <div id="laporanTableArea" class="table-responsive"></div>
+                        </div>
+                    </div>
+                    <!-- Pengaturan Tab -->
+                    <div class="tab-pane fade h-100" id="pengaturanTabPane" role="tabpanel" aria-labelledby="pengaturan-tab">
+                        <div id="pengaturan" class="card-dgw mb-1">
+                            <div class="section-title-dgw mb-2"><i class="bi bi-gear text-secondary"></i> Pengaturan</div>
+                            <div>
+                                <label class="form-label fw-semibold mb-1" for="confidenceThreshold" style="font-size:0.92rem;">Confidence Threshold</label>
+                                <div class="d-flex align-items-center">
+                                    <input type="range" id="confidenceThreshold" min="0.5" max="1" step="0.05" value="0.8" class="form-range setting-slider" style="max-width:90px;">
+                                    <span id="thresholdValue" class="ms-2 badge-dgw badge-dgw-info">0.8</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- End Tab Panes -->
+            </div>
+        </div>
+    </div>
+    <script>
+        // Global variables
+        let video = document.getElementById('videoElement');
+        let model = null;
+        let stream = null;
+        let isFrontCamera = true;
+        let detectionInterval = null;
+        let detectedFaces = [];
+
+        // Laporan hasil capture
+        let capturedReports = [];
+
+        // Chart.js
+        let maskChart = null;
+
+        // DOM Elements
+        const faceBoxesContainer = document.getElementById('faceBoxesContainer');
+        const capturedImage = document.getElementById('capturedImage');
+        const reportResult = document.getElementById('reportResult');
+        const activityLog = document.getElementById('activityLog');
+        const confidenceThreshold = document.getElementById('confidenceThreshold');
+        const thresholdValue = document.getElementById('thresholdValue');
+        const switchButton = document.getElementById('switchButton');
+        const focusCanvas = document.getElementById('focusCanvas');
+        const captureButton = document.getElementById('captureButton');
+        const laporanTableArea = document.getElementById('laporanTableArea');
+        const maskChartCanvas = document.getElementById('maskChart');
+        // Dashboard metric elements
+        const metricTotalLaporan = document.getElementById('metricTotalLaporan');
+        const metricTotalWajah = document.getElementById('metricTotalWajah');
+        const metricMasker = document.getElementById('metricMasker');
+        const metricNoMasker = document.getElementById('metricNoMasker');
+        const metricKepatuhan = document.getElementById('metricKepatuhan');
+
+        // Untuk menyimpan hasil deteksi terakhir (untuk laporan)
+        let lastDetectionResult = {
+            faces: [],
+            maskCount: 0,
+            noMaskCount: 0,
+            time: null
+        };
+
+        // Event Listeners
+        confidenceThreshold.addEventListener('input', function() {
+            thresholdValue.textContent = this.value;
+        });
+
+        // Helper: Resize canvas to match video
+        function resizeFocusCanvas() {
+            if (!video || !focusCanvas) return;
+            if (video.videoWidth === 0 || video.videoHeight === 0) return;
+            focusCanvas.width = video.videoWidth;
+            focusCanvas.height = video.videoHeight;
+            focusCanvas.style.width = video.offsetWidth + "px";
+            focusCanvas.style.height = video.offsetHeight + "px";
+        }
+        window.addEventListener('resize', resizeFocusCanvas);
+
+        // Helper: Set video mirror (untuk kamera depan)
+        function setVideoMirror(isMirror) {
+            if (isMirror) {
+                video.style.transform = "scaleX(-1)";
+            } else {
+                video.style.transform = "scaleX(1)";
+            }
+        }
+
+        // Initialize model
+        async function initModel() {
+            try {
+                addLog("Memuat model deteksi wajah...");
+                model = await blazeface.load();
+                addLog("Model siap digunakan");
+                await startVideo();
+            } catch (err) {
+                addLog(`Gagal memuat model: ${err.message}`, true);
+            }
+        }
+        
+        // Start video stream
+        async function startVideo() {
+            try {
+                let devices = await navigator.mediaDevices.enumerateDevices();
+                let videoDevices = devices.filter(device => device.kind === 'videoinput');
+                let facingMode = isFrontCamera ? "user" : "environment";
+                let deviceId = null;
+
+                for (let device of videoDevices) {
+                    if (facingMode === "environment" && device.label.toLowerCase().includes("back")) {
+                        deviceId = device.deviceId;
+                        break;
+                    }
+                    if (facingMode === "user" && device.label.toLowerCase().includes("front")) {
+                        deviceId = device.deviceId;
+                        break;
+                    }
+                }
+                if (!deviceId && videoDevices.length > 0) {
+                    deviceId = videoDevices[0].deviceId;
+                }
+
+                const constraints = {
+                    video: deviceId ? {
+                        deviceId: { exact: deviceId },
+                        width: { ideal: 640 },
+                        height: { ideal: 360 },
+                        facingMode: facingMode
+                    } : {
+                        facingMode: facingMode,
+                        width: { ideal: 640 },
+                        height: { ideal: 360 }
+                    }
+                };
+
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                switchButton.disabled = false;
+
+                setVideoMirror(isFrontCamera);
+
+                video.onloadedmetadata = () => {
+                    resizeFocusCanvas();
+                };
+
+                if (detectionInterval) {
+                    clearInterval(detectionInterval);
+                }
+                detectionInterval = setInterval(detectFaces, 250);
+
+                addLog("Kamera berhasil diaktifkan");
+            } catch (err) {
+                addLog(`Gagal mengakses kamera: ${err.message}`, true);
+            }
+        }
+        
+        // Switch between front and back camera
+        async function switchCamera() {
+            isFrontCamera = !isFrontCamera;
+            await startVideo();
+        }
+
+        // Fungsi deteksi warna masker pada area mulut/hidung
+        function isMaskColorMatch(imageData) {
+            let data = imageData.data;
+            let total = data.length / 4;
+            let white = 0, black = 0, lightblue = 0, nonSkinSolid = 0;
+            let skin = 0;
+            for (let i = 0; i < data.length; i += 4) {
+                let r = data[i], g = data[i+1], b = data[i+2];
+                if (r > 180 && g > 180 && b > 180) white++;
+                else if (r < 60 && g < 60 && b < 60) black++;
+                else if (
+                    r >= 80 && r <= 200 &&
+                    g >= 120 && g <= 255 &&
+                    b >= 180 && b <= 255
+                ) lightblue++;
+                else if (
+                    (r > 80 && r < 255) &&
+                    (g > 40 && g < 220) &&
+                    (b > 20 && b < 200) &&
+                    (r > g) && (r > b)
+                ) {
+                    skin++;
+                }
+                else {
+                    nonSkinSolid++;
+                }
+            }
+            let threshold = 0.18 * total;
+            if (white > threshold || black > threshold || lightblue > threshold) {
+                return true;
+            }
+            if (nonSkinSolid > 0.30 * total && skin < 0.60 * total) {
+                return true;
+            }
+            return false;
+        }
+
+        // Face detection function
+        async function detectFaces() {
+            if (!model || video.readyState !== 4) return;
+
+            resizeFocusCanvas();
+
+            try {
+                const threshold = parseFloat(confidenceThreshold.value);
+                const predictions = await model.estimateFaces(video, false);
+
+                faceBoxesContainer.innerHTML = '';
+                detectedFaces = [];
+
+                const ctx = focusCanvas.getContext('2d');
+                ctx.clearRect(0, 0, focusCanvas.width, focusCanvas.height);
+
+                let tempCanvas = document.createElement('canvas');
+                let tempCtx = tempCanvas.getContext('2d');
+
+                const isMirror = isFrontCamera;
+
+                if (predictions.length === 0) {
+                    // Draw a focus rectangle in the center
+                    const w = focusCanvas.width * 0.35;
+                    const h = focusCanvas.height * 0.45;
+                    const x = (focusCanvas.width - w) / 2;
+                    const y = (focusCanvas.height - h) / 2;
+                    ctx.save();
+                    ctx.strokeStyle = "#0d6efd";
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([6, 6]);
+                    ctx.strokeRect(x, y, w, h);
+                    ctx.font = "12px Montserrat, Arial";
+                    ctx.fillStyle = "#0d6efd";
+                    ctx.textAlign = "center";
+                    ctx.fillText("Arahkan wajah ke dalam kotak", focusCanvas.width/2, y-7);
+                    ctx.restore();
+                } else {
+                    // Find the face closest to the center (focus)
+                    let focusFace = null;
+                    let minDist = Infinity;
+                    const cx = focusCanvas.width / 2;
+                    const cy = focusCanvas.height / 2;
+                    predictions.forEach(prediction => {
+                        if (prediction.probability[0] < threshold) return;
+                        let x = (prediction.topLeft[0] + prediction.bottomRight[0]) / 2;
+                        if (isMirror) x = focusCanvas.width - x;
+                        const y = (prediction.topLeft[1] + prediction.bottomRight[1]) / 2;
+                        const dist = Math.sqrt((x-cx)*(x-cx) + (y-cy)*(y-cy));
+                        if (dist < minDist) {
+                            minDist = dist;
+                            focusFace = prediction;
+                        }
+                    });
+
+                    let maskCount = 0;
+                    let noMaskCount = 0;
+                    let facesForAnalysis = [];
+
+                    predictions.forEach(prediction => {
+                        if (prediction.probability[0] < threshold) return;
+
+                        let x1 = prediction.topLeft[0];
+                        let y1 = prediction.topLeft[1];
+                        let x2 = prediction.bottomRight[0];
+                        let y2 = prediction.bottomRight[1];
+                        let width = x2 - x1;
+                        let height = y2 - y1;
+
+                        if (isMirror) {
+                            x1 = focusCanvas.width - x2;
+                            x2 = focusCanvas.width - prediction.topLeft[0];
+                        }
+
+                        // Area masker: bagian bawah 45% dari wajah (lebih besar)
+                        const maskY = y1 + height * 0.55;
+                        const maskHeight = height * 0.43;
+                        const maskX = x1 + width * 0.10;
+                        const maskWidth = width * 0.80;
+
+                        tempCanvas.width = Math.max(1, Math.floor(maskWidth));
+                        tempCanvas.height = Math.max(1, Math.floor(maskHeight));
+
+                        if (isMirror) {
+                            tempCtx.save();
+                            tempCtx.scale(-1, 1);
+                            tempCtx.drawImage(
+                                video,
+                                focusCanvas.width - (maskX + maskWidth), maskY, maskWidth, maskHeight,
+                                -tempCanvas.width, 0, tempCanvas.width, tempCanvas.height
+                            );
+                            tempCtx.restore();
+                        } else {
+                            tempCtx.drawImage(
+                                video,
+                                maskX, maskY, maskWidth, maskHeight,
+                                0, 0, tempCanvas.width, tempCanvas.height
+                            );
+                        }
+                        let maskImageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+
+                        // Deteksi warna masker
+                        let wearingMask = isMaskColorMatch(maskImageData);
+
+                        // Perbaikan: jika area kulit sangat dominan, override ke tanpa masker
+                        let skinPixels = 0;
+                        let totalPixels = maskImageData.data.length / 4;
+                        for (let i = 0; i < maskImageData.data.length; i += 4) {
+                            let r = maskImageData.data[i];
+                            let g = maskImageData.data[i+1];
+                            let b = maskImageData.data[i+2];
+                            if (
+                                (r > 80 && r < 255) &&
+                                (g > 40 && g < 220) &&
+                                (b > 20 && b < 200) &&
+                                (r > g) && (r > b)
+                            ) {
+                                skinPixels++;
+                            }
+                        }
+                        if (skinPixels > 0.60 * totalPixels) {
+                            wearingMask = false;
+                        }
+
+                        const color = wearingMask ? '#00c48c' : '#ff4e7a';
+
+                        if (wearingMask) {
+                            maskCount++;
+                        } else {
+                            noMaskCount++;
+                        }
+
+                        // Draw face box
+                        const box = document.createElement('div');
+                        box.className = 'face-box';
+                        box.style.borderColor = color;
+
+                        let boxX = x1;
+                        let boxY = y1;
+                        let boxWidth = width;
+                        let boxHeight = height;
+
+                        box.style.left = `${boxX}px`;
+                        box.style.top = `${boxY}px`;
+                        box.style.width = `${boxWidth}px`;
+                        box.style.height = `${boxHeight}px`;
+
+                        let isFocus = false;
+                        if (focusFace === prediction) isFocus = true;
+
+                        if (isFocus) {
+                            box.style.boxShadow = "0 0 0 2px #0d6efd55";
+                            box.style.borderWidth = "3px";
+                        }
+
+                        const panel = document.createElement('div');
+                        panel.className = 'detection-panel';
+                        panel.style.backgroundColor = color;
+
+                        panel.innerHTML = `
+                            <span>${wearingMask ? 'Masker OK' : 'TANPA MASKER'}</span>
+                            <span>${(prediction.probability[0]*100).toFixed(1)}%</span>
+                        `;
+
+                        panel.style.position = 'absolute';
+                        panel.style.bottom = `calc(100% + 2px)`;
+
+                        box.appendChild(panel);
+                        faceBoxesContainer.appendChild(box);
+
+                        const faceObj = {
+                            x: boxX, y: boxY, width: boxWidth, height: boxHeight,
+                            prob: prediction.probability[0],
+                            wearingMask,
+                            timestamp: new Date().toISOString()
+                        };
+                        detectedFaces.push(faceObj);
+                        facesForAnalysis.push(faceObj);
+                    });
+
+                    // Draw focus rectangle on the face closest to center
+                    if (focusFace) {
+                        ctx.save();
+                        ctx.strokeStyle = "#0d6efd";
+                        ctx.lineWidth = 2;
+                        ctx.setLineDash([]);
+                        let fx1 = focusFace.topLeft[0];
+                        let fy1 = focusFace.topLeft[1];
+                        let fx2 = focusFace.bottomRight[0];
+                        let fy2 = focusFace.bottomRight[1];
+                        if (isMirror) {
+                            fx1 = focusCanvas.width - focusFace.bottomRight[0];
+                            fx2 = focusCanvas.width - focusFace.topLeft[0];
+                        }
+                        const fw = fx2 - fx1;
+                        const fh = fy2 - fy1;
+                        ctx.strokeRect(fx1, fy1, fw, fh);
+                        ctx.restore();
+                    }
+
+                    lastDetectionResult = {
+                        faces: facesForAnalysis.map(f => ({...f})),
+                        maskCount,
+                        noMaskCount,
+                        time: new Date()
+                    };
+                }
+            } catch (err) {
+                console.error('Detection error:', err);
+            }
+        }
+        
+        // Capture image from video dan buat laporan
+        function captureImage() {
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx2 = canvas.getContext('2d');
+                if (isFrontCamera) {
+                    ctx2.save();
+                    ctx2.translate(canvas.width, 0);
+                    ctx2.scale(-1, 1);
+                    ctx2.drawImage(video, 0, 0, canvas.width, canvas.height);
+                    ctx2.restore();
+                } else {
+                    ctx2.drawImage(video, 0, 0, canvas.width, canvas.height);
+                }
+                const imgData = canvas.toDataURL('image/png');
+                capturedImage.src = imgData;
+
+                if (lastDetectionResult && lastDetectionResult.faces.length > 0) {
+                    let html = `
+                        <div class="mb-1">
+                            <span class="badge-dgw badge-dgw-info me-1">Wajah: ${lastDetectionResult.faces.length}</span>
+                            <span class="badge-dgw badge-dgw-success me-1">Masker: ${lastDetectionResult.maskCount}</span>
+                            <span class="badge-dgw badge-dgw-danger me-1">Tanpa: ${lastDetectionResult.noMaskCount}</span>
+                            <span class="badge-dgw badge-dgw-warning">Kepatuhan: ${((lastDetectionResult.maskCount/lastDetectionResult.faces.length)*100).toFixed(1)}%</span>
+                        </div>
+                    `;
+                    reportResult.innerHTML = html;
+
+                    capturedReports.push({
+                        time: lastDetectionResult.time,
+                        img: imgData,
+                        faces: lastDetectionResult.faces.map(f => ({...f})),
+                        maskCount: lastDetectionResult.maskCount,
+                        noMaskCount: lastDetectionResult.noMaskCount
+                    });
+
+                    updateLaporanTable();
+                    updateMaskChart();
+                    updateDashboardMetrics();
+
+                    addLog("Gambar berhasil diambil dan laporan dibuat.");
+                } else {
+                    reportResult.innerHTML = `
+                        <div class="badge-dgw badge-dgw-warning">Tidak ada wajah terdeteksi pada gambar yang diambil.</div>
+                    `;
+                    addLog("Gambar diambil, namun tidak ada wajah terdeteksi.", true);
+                }
+                // Scroll ke bagian hasil agar user langsung melihat hasilnya
+                const hasilSection = document.getElementById('hasil');
+                if (hasilSection) {
+                    hasilSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            } else {
+                addLog("Kamera belum siap untuk mengambil gambar.", true);
+            }
+        }
+
+        // Update dashboard metrics
+        function updateDashboardMetrics() {
+            let totalLaporan = capturedReports.length;
+            let totalWajah = 0, masker = 0, noMasker = 0;
+            let kepatuhan = 0;
+            capturedReports.forEach(r => {
+                totalWajah += r.faces.length;
+                masker += r.maskCount;
+                noMasker += r.noMaskCount;
+            });
+            if (totalWajah > 0) {
+                kepatuhan = ((masker / totalWajah) * 100).toFixed(1);
+            }
+            metricTotalLaporan.textContent = totalLaporan;
+            metricTotalWajah.textContent = totalWajah;
+            metricMasker.textContent = masker;
+            metricNoMasker.textContent = noMasker;
+            metricKepatuhan.textContent = kepatuhan + "%";
+        }
+
+        // Update laporan tabel di area laporanTableArea
+        function updateLaporanTable() {
+            if (capturedReports.length === 0) {
+                laporanTableArea.innerHTML = '<div class="text-center text-secondary py-2" style="font-size:0.92rem;">Belum ada laporan</div>';
+                updateDashboardMetrics();
+                return;
+            }
+            let tableHtml = `
+                <table class="table table-dgw table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th style="font-size:0.89rem;">Waktu</th>
+                            <th class="text-center">Wajah</th>
+                            <th class="text-center">Masker</th>
+                            <th class="text-center">Tanpa</th>
+                            <th class="text-center">Kepatuhan</th>
+                            <th class="text-center">Detail</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            capturedReports.forEach((report, idx) => {
+                const waktu = report.time ? (new Date(report.time)).toLocaleTimeString() : '';
+                const persentase = report.faces.length > 0 ? ((report.maskCount/report.faces.length)*100).toFixed(1) : '0';
+                tableHtml += `
+                    <tr>
+                        <td>${waktu}</td>
+                        <td class="text-center">${report.faces.length}</td>
+                        <td class="text-center text-success fw-bold">${report.maskCount}</td>
+                        <td class="text-center text-danger fw-bold">${report.noMaskCount}</td>
+                        <td class="text-center text-primary fw-bold">${persentase}%</td>
+                        <td class="text-center">
+                            <button onclick="toggleDetailTable(${idx})" class="btn btn-link text-primary p-0" style="font-size:0.89rem;">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    <tr id="detail-row-${idx}" class="detail-table-row" style="display:none;">
+                        <td colspan="6">
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>No</th>
+                                            <th>Confidence</th>
+                                            <th>Masker</th>
+                                            <th>Waktu</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                `;
+                if (report.faces.length > 0) {
+                    report.faces.forEach((face, i) => {
+                        tableHtml += `
+                            <tr>
+                                <td class="text-center">${i+1}</td>
+                                <td class="text-center">${(face.prob*100).toFixed(1)}%</td>
+                                <td class="text-center">
+                                    <span class="badge-dgw ${face.wearingMask ? 'badge-dgw-success' : 'badge-dgw-danger'}">
+                                        ${face.wearingMask ? 'Ya' : 'Tidak'}
+                                    </span>
+                                </td>
+                                <td class="text-center">${(new Date(face.timestamp)).toLocaleTimeString()}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tableHtml += `
+                        <tr>
+                            <td colspan="4" class="text-center text-secondary">Tidak ada wajah terdeteksi</td>
+                        </tr>
+                    `;
+                }
+                tableHtml += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            tableHtml += `
+                    </tbody>
+                </table>
+            `;
+            laporanTableArea.innerHTML = tableHtml;
+            updateDashboardMetrics();
+        }
+
+        // Toggle detail table visibility
+        window.toggleDetailTable = function(idx) {
+            const row = document.getElementById('detail-row-' + idx);
+            if (row) {
+                row.style.display = (row.style.display === 'none' || row.style.display === '') ? 'table-row' : 'none';
+            }
+        }
+
+        // Update grafik kepatuhan masker
+        function updateMaskChart() {
+            if (!maskChart) {
+                maskChart = new Chart(maskChartCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [
+                            {
+                                label: 'Pakai Masker',
+                                data: [],
+                                borderColor: '#00c48c',
+                                backgroundColor: 'rgba(0,196,140,0.08)',
+                                fill: true,
+                                tension: 0.3
+                            },
+                            {
+                                label: 'Tanpa Masker',
+                                data: [],
+                                borderColor: '#ff4e7a',
+                                backgroundColor: 'rgba(255,78,122,0.08)',
+                                fill: true,
+                                tension: 0.3
+                            },
+                            {
+                                label: 'Kepatuhan (%)',
+                                data: [],
+                                borderColor: '#0d6efd',
+                                backgroundColor: 'rgba(13,110,253,0.08)',
+                                fill: false,
+                                yAxisID: 'y1',
+                                tension: 0.3
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: true }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: { display: false }
+                            },
+                            y1: {
+                                beginAtZero: true,
+                                position: 'right',
+                                title: { display: false },
+                                min: 0,
+                                max: 100,
+                                grid: { drawOnChartArea: false }
+                            }
+                        }
+                    }
+                });
+            }
+            const labels = capturedReports.map(r => r.time ? (new Date(r.time)).toLocaleTimeString() : '');
+            const maskData = capturedReports.map(r => r.maskCount);
+            const noMaskData = capturedReports.map(r => r.noMaskCount);
+            const percentData = capturedReports.map(r => {
+                if (r.faces.length > 0) {
+                    return ((r.maskCount/r.faces.length)*100).toFixed(1);
+                }
+                return 0;
+            });
+
+            maskChart.data.labels = labels;
+            maskChart.data.datasets[0].data = maskData;
+            maskChart.data.datasets[1].data = noMaskData;
+            maskChart.data.datasets[2].data = percentData;
+            maskChart.update();
+        }
+        
+        // Add log message
+        function addLog(message, isError = false) {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry ' + (isError ? 'error' : 'info');
+            logEntry.textContent = `[${timeString}] ${message}`;
+            activityLog.appendChild(logEntry);
+            activityLog.scrollTop = activityLog.scrollHeight;
+        }
+        
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', () => {
+            initModel();
+            addLog("Sistem siap digunakan");
+            switchButton.disabled = true;
+            resizeFocusCanvas();
+            updateLaporanTable();
+            updateMaskChart();
+            updateDashboardMetrics();
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
