@@ -12,6 +12,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
     <style>
+        /* ... (CSS remains unchanged) ... */
         :root {
             --primary: #0d6efd;
             --primary-dark: #0a58ca;
@@ -593,6 +594,24 @@
             time: null
         };
 
+        // --- Tambahan untuk fitur suara ---
+        // State untuk menghindari suara diulang-ulang terlalu sering
+        // Perbaikan: gunakan state yang hanya bicara 1x per perubahan status
+        let lastVoiceState = null; // "mask", "no_mask", null
+        // --- END Tambahan fitur suara ---
+
+        // Fungsi untuk bicara menggunakan Web Speech API
+        function speak(text) {
+            if (!('speechSynthesis' in window)) return;
+            // Stop any ongoing speech
+            window.speechSynthesis.cancel();
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.lang = 'id-ID';
+            utter.rate = 1;
+            utter.pitch = 1;
+            window.speechSynthesis.speak(utter);
+        }
+
         // Event Listeners
         confidenceThreshold.addEventListener('input', function() {
             thresholdValue.textContent = this.value;
@@ -754,6 +773,11 @@
 
                 const isMirror = isFrontCamera;
 
+                // --- Variabel untuk fitur suara ---
+                let detectedMask = 0;
+                let detectedNoMask = 0;
+                // --- END ---
+
                 if (predictions.length === 0) {
                     // Draw a focus rectangle in the center
                     const w = focusCanvas.width * 0.35;
@@ -770,6 +794,9 @@
                     ctx.textAlign = "center";
                     ctx.fillText("Arahkan wajah ke dalam kotak", focusCanvas.width/2, y-7);
                     ctx.restore();
+
+                    // Reset state suara jika tidak ada wajah
+                    lastVoiceState = null;
                 } else {
                     // Find the face closest to the center (focus)
                     let focusFace = null;
@@ -861,8 +888,10 @@
 
                         if (wearingMask) {
                             maskCount++;
+                            detectedMask++;
                         } else {
                             noMaskCount++;
+                            detectedNoMask++;
                         }
 
                         // Draw face box
@@ -939,6 +968,31 @@
                         noMaskCount,
                         time: new Date()
                     };
+
+                    // --- FITUR SUARA: Bicara hanya 1x per perubahan status ---
+                    // Hanya bicara jika ada wajah terdeteksi
+                    // 1x "Pakai masker" jika semua wajah pakai masker, 1x "Tanpa masker" jika ada minimal 1 tanpa masker
+                    let voiceToSay = null;
+                    if (facesForAnalysis.length > 0) {
+                        if (detectedNoMask > 0) {
+                            voiceToSay = "no_mask";
+                        } else if (detectedMask > 0) {
+                            voiceToSay = "mask";
+                        }
+                        // Hanya bicara jika status berubah
+                        if (voiceToSay !== lastVoiceState) {
+                            if (voiceToSay === "no_mask") {
+                                speak("Tanpa masker");
+                            } else if (voiceToSay === "mask") {
+                                speak("Pakai masker");
+                            }
+                            lastVoiceState = voiceToSay;
+                        }
+                    } else {
+                        // Tidak ada wajah, reset state agar suara bisa muncul lagi saat wajah muncul
+                        lastVoiceState = null;
+                    }
+                    // --- END FITUR SUARA ---
                 }
             } catch (err) {
                 console.error('Detection error:', err);
